@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 ## LG Inventory Automation Demo (AI + Data Fusion)
+=======
+LG Inventory Automation Demo (AI + Data Fusion)
+>>>>>>> b33d683 (Save local changes before rebase)
 
 An interactive Streamlit demo showcasing an automated workflow for a consumer electronics business.
 It demonstrates how AI agents can integrate with emails, databases, and dashboards to streamline operations and business analytics.
