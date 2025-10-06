@@ -1,5 +1,5 @@
 streamlit
 pandas
 plotly
-sqlite3-binary
+sqlite3-utils
 reportlab
