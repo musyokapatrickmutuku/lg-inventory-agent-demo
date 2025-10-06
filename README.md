@@ -1,14 +1,14 @@
-Inventory Automation Demo (AI + Data Fusion)
+## LG Inventory Automation Demo (AI + Data Fusion)
 
 An interactive Streamlit demo showcasing an automated workflow for a consumer electronics business.
 It demonstrates how AI agents can integrate with emails, databases, and dashboards to streamline operations and business analytics.
 
-🌐 Live Demo
+### 🌐 Live Demo
 
 Once deployed, the app will be available at:
 👉 https://your-app-name.streamlit.app
 
-🧠 Overview
+### 🧠 Overview
 
 This demo simulates an automation flow for a retail electronics business that sells LG TVs, phones, and other devices.
 It showcases a LangGraph-ready workflow combining:
@@ -21,7 +21,7 @@ Analytics dashboard
 
 Natural-language querying
 
-⚡ Architecture (LangGraph-Ready)
+### ⚡ Architecture (LangGraph-Ready)
 graph TD
     A[📥 Email Connector<br/>.eml ingestion] --> B[🧠 Rule-based + LLM Classifier]
     B --> C[💾 SQLite Database<br/>(inventory + email logs)]
@@ -33,22 +33,22 @@ This architecture can easily be extended into a production LangGraph flow where 
 
 🧩 Features
 
-✅ Automatic Email Classification
+#### ✅ Automatic Email Classification
 – Processes .eml files and classifies them into categories (RFQ, Complaint, Finance, etc.)
 
-✅ Centralized Inventory Database
+#### ✅ Centralized Inventory Database
 – SQLite backend containing all product and sales data
 
-✅ Accessible Analytics Dashboard
+#### ✅ Accessible Analytics Dashboard
 – High-contrast charts for inclusivity (colorblind-friendly design)
 
-✅ LLM-Style Query Assistant
+#### ✅ LLM-Style Query Assistant
 – Ask questions like “show average price of 65-inch models” or “what division has the highest resale price”
 
-✅ LangGraph Integration Ready
+#### ✅ LangGraph Integration Ready
 – Each layer is modular and ready to be transformed into a node in LangGraph for production orchestration
 
-🚀 Quick Start (Local)
+### 🚀 Quick Start (Local)
 
 1️⃣ Clone the repository
 
@@ -79,7 +79,7 @@ streamlit run app.py
 6️⃣ Open in browser
 Go to http://localhost:8501
 
-🌍 Deploy to Streamlit Cloud (Free)
+### 🌍 Deploy to Streamlit Cloud (Free)
 
 Go to https://share.streamlit.io/
 
@@ -93,12 +93,12 @@ Set app.py as the main file
 
 Click Deploy
 
-💥 Done — you’ll get a public link like:
+### 💥 Done — you’ll get a public link like:
 https://lg-inventory-agent-demo.streamlit.app
 
 Anyone can now run your app instantly — no installation required.
 
-📊 Example Use Cases
+### 📊 Example Use Cases
 Task	Description
 Classify incoming emails	Automatically categorize supplier or customer emails
 Generate insights	Average resale prices, model mix, inventory count
@@ -114,7 +114,7 @@ Add email API connectors (Gmail, Outlook)
 
 Extend BI module with real-time sales tracking
 
-👨‍💻 Author
+#### 👨‍💻 Author
 
 Patrick Musyoka
 Data Scientist & Automation Specialist
@@ -125,7 +125,7 @@ Data Scientist & Automation Specialist
 
 MIT License — free for demo and educational use.
 
-🧩 BONUS: Optional .streamlit/config.toml
+#### 🧩 BONUS: Optional .streamlit/config.toml
 
 To ensure a bright UI theme for presentations, add this file:
 
