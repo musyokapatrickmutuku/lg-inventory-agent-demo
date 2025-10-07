@@ -219,4 +219,4 @@ if query:
 # FOOTER
 # ==============================
 st.markdown("---")
-st.caption("Built using Streamlit · Prototype powered
+st.caption ("Built using Streamlit · Prototype powered by LangGraph-style agent logic.")
