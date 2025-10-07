@@ -1,189 +1,214 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
+import sqlite3
 import plotly.express as px
+import os
 
-# --------------------------------------------
-# CONFIG & PAGE SETUP
-# --------------------------------------------
+# ==============================
+# APP CONFIGURATION
+# ==============================
 st.set_page_config(
     page_title="Smart Business Analytics Agent",
-    page_icon="📦",
+    page_icon="📊",
     layout="wide",
 )
 
-# Define color scheme (high-contrast for visibility)
-COLOR_CONFIDENCE_HIGH = "#2ecc71"   # Bright green
-COLOR_CONFIDENCE_MED = "#f1c40f"    # Yellow
-COLOR_CONFIDENCE_LOW = "#e74c3c"    # Red
-COLOR_PRIMARY = "#1e90ff"           # Bright blue
+st.title("📊 Smart Business Analytics Agent")
+st.caption("An AI-powered demo for intelligent email & inventory analytics")
 
-# --------------------------------------------
-# NAVIGATION BAR
-# --------------------------------------------
-menu = st.sidebar.radio("📂 Navigation", ["Dashboard", "Query Assistant", "Settings"])
-
-st.markdown(
-    f"""
-    <style>
-        .main {{
-            background-color: #ffffff;
-        }}
-        .stApp header {{
-            background-color: {COLOR_PRIMARY};
-            color: white;
-            padding: 0.5rem;
-        }}
-        .stApp header h1 {{
-            color: white;
-        }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# --------------------------------------------
-# DATABASE CONNECTION
-# --------------------------------------------
-DB_PATH = "demo_agent.db"
-
-def get_connection():
-    return sqlite3.connect(DB_PATH)
-
-# Helper to get data
+# ==============================
+# LOAD / CREATE DATABASE
+# ==============================
 @st.cache_data
 def load_data():
-    conn = get_connection()
-    df = pd.read_sql_query("SELECT * FROM emails", conn)
+    db_path = "emails.db"
+
+    # Create demo database if missing
+    if not os.path.exists(db_path):
+        conn = sqlite3.connect(db_path)
+        demo_data = [
+            (
+                "sales_confirmation.eml",
+                "Sales Confirmation",
+                "sales@example.com",
+                "This is a sales confirmation email.",
+                "Sales Confirmation",
+                0.95,
+                "High confidence due to 'confirmation' and 'sale' keywords."
+            ),
+            (
+                "shipment_update.eml",
+                "Shipment Update",
+                "logistics@example.com",
+                "Your order has shipped and will arrive soon.",
+                "Shipment Update",
+                0.90,
+                "Detected logistics terms like 'shipped' and 'arrival'."
+            ),
+            (
+                "rfq_request.eml",
+                "Request for Quotation",
+                "buyer@example.com",
+                "Please send a quotation for 65-inch models.",
+                "RFQ",
+                0.93,
+                "Found 'quotation' and 'request' patterns with high certainty."
+            ),
+        ]
+        df_demo = pd.DataFrame(
+            demo_data,
+            columns=[
+                "filename",
+                "subject",
+                "from",
+                "body",
+                "category",
+                "confidence",
+                "explanation",
+            ],
+        )
+        df_demo.to_sql("emails", conn, if_exists="replace", index=False)
+        conn.close()
+        st.session_state["demo_mode"] = True
+        return df_demo
+
+    # If DB exists, load from SQLite
+    conn = sqlite3.connect(db_path)
+    try:
+        df = pd.read_sql_query("SELECT * FROM emails", conn)
+        st.session_state["demo_mode"] = False
+    except Exception:
+        # fallback if table doesn't exist
+        demo_data = [
+            (
+                "demo.eml",
+                "Welcome",
+                "noreply@example.com",
+                "This is a sample record used for demonstration.",
+                "General",
+                0.5,
+                "Fallback default created due to empty database.",
+            )
+        ]
+        df = pd.DataFrame(
+            demo_data,
+            columns=[
+                "filename",
+                "subject",
+                "from",
+                "body",
+                "category",
+                "confidence",
+                "explanation",
+            ],
+        )
+        df.to_sql("emails", conn, if_exists="replace", index=False)
+        st.session_state["demo_mode"] = True
     conn.close()
     return df
 
-# --------------------------------------------
-# DASHBOARD PAGE
-# --------------------------------------------
-if menu == "Dashboard":
-    st.title("📦 Smart SupplyMail Analyzer")
-    st.caption("AI-powered insights from supplier and buyer communications")
 
-    df = load_data()
+df = load_data()
 
-    if df.empty:
-        st.warning("⚠️ No email data available. Please process .eml files first.")
-    else:
-        # Add confidence color
-        def confidence_color(score):
-            if score >= 0.8:
-                return COLOR_CONFIDENCE_HIGH
-            elif score >= 0.5:
-                return COLOR_CONFIDENCE_MED
-            return COLOR_CONFIDENCE_LOW
-
-        df["ConfidenceColor"] = df["confidence"].apply(confidence_color)
-
-        st.subheader("📊 Classified Emails Overview")
-        st.dataframe(df[["subject", "category", "confidence", "explanation"]], use_container_width=True)
-
-        # Visualization
-        col1, col2 = st.columns(2)
-        with col1:
-            fig1 = px.bar(
-                df,
-                x="category",
-                color="category",
-                title="Email Distribution by Category",
-                color_discrete_sequence=px.colors.qualitative.Safe
-            )
-            st.plotly_chart(fig1, use_container_width=True)
-
-        with col2:
-            fig2 = px.scatter(
-                df,
-                x="category",
-                y="confidence",
-                color="category",
-                size=[10 for _ in range(len(df))],
-                title="Confidence Levels by Category",
-                color_discrete_sequence=px.colors.qualitative.Bold
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-
-        # Inventory summary block
-        st.markdown("---")
-        st.subheader("📦 Inventory Summary Insights")
-
-        try:
-            conn = get_connection()
-            inventory_df = pd.read_sql_query("SELECT * FROM inventory", conn)
-            conn.close()
-
-            st.dataframe(inventory_df, use_container_width=True)
-
-            avg_price = inventory_df["Resale Price"].mean()
-            avg_lg = inventory_df[inventory_df["Model"].str.contains("LG", case=False, na=False)]["Resale Price"].mean()
-            total_lg = inventory_df[inventory_df["Model"].str.contains("LG", case=False, na=False)]["Stock"].sum()
-
-            st.metric("💰 Average Resale Price (All Models)", f"KES {avg_price:,.2f}")
-            st.metric("💰 Average Resale Price (LG Models)", f"KES {avg_lg:,.2f}")
-            st.metric("📦 Total LG Inventory", f"{int(total_lg)} units")
-
-        except Exception as e:
-            st.warning(f"⚠️ Could not load inventory data: {e}")
-
-# --------------------------------------------
-# QUERY ASSISTANT PAGE
-# --------------------------------------------
-elif menu == "Query Assistant":
-    st.title("💬 Query Assistant")
-    st.caption("Ask natural language questions about your inventory and email data")
-
-    user_query = st.text_input("Ask your question below:", placeholder="e.g., show average price of 65-inch models")
-
-    if st.button("Ask"):
-        if not user_query.strip():
-            st.warning("Please enter a question first.")
-        else:
-            conn = get_connection()
-            inv_df = pd.read_sql_query("SELECT * FROM inventory", conn)
-            conn.close()
-
-            user_query_lower = user_query.lower()
-            response = ""
-
-            # Simple AI-ish deterministic responses
-            if "average" in user_query_lower and "price" in user_query_lower:
-                if "65" in user_query_lower:
-                    avg_65 = inv_df[inv_df["Model"].str.contains("65", na=False)]["Resale Price"].mean()
-                    response = f"The average resale price for 65-inch models is **KES {avg_65:,.2f}**."
-                else:
-                    avg_all = inv_df["Resale Price"].mean()
-                    response = f"The overall average resale price across all models is **KES {avg_all:,.2f}**."
-
-            elif "inventory" in user_query_lower or "stock" in user_query_lower:
-                total_stock = inv_df["Stock"].sum()
-                response = f"The total inventory currently in stock is **{int(total_stock)} units**."
-
-            elif "lg" in user_query_lower:
-                lg_models = inv_df[inv_df["Model"].str.contains("LG", case=False, na=False)]["Model"].unique()
-                response = f"The LG models on offer include: **{', '.join(lg_models)}**."
-
-            else:
-                response = "I'm not sure how to answer that yet — the full LLM integration will handle this in production."
-
-            st.success(response)
-
-# --------------------------------------------
-# SETTINGS PAGE
-# --------------------------------------------
-elif menu == "Settings":
-    st.title("⚙️ Settings")
-    st.info("Future features: Email API keys, scheduling, and LangGraph workflow integrations.")
-    st.markdown(
-        """
-        **Coming soon:**
-        - Gmail/Outlook ingestion settings  
-        - Rule tuning for classification  
-        - LangGraph orchestration hooks  
-        - Data source management
-        """
+# ==============================
+# DEMO MODE BANNER
+# ==============================
+if "demo_mode" in st.session_state and st.session_state["demo_mode"]:
+    st.warning(
+        "💡 Running in demo mode with sample emails. "
+        "Connect your production SQLite or cloud database for live analytics.",
+        icon="⚙️",
     )
 
+# ==============================
+# DASHBOARD SECTION
+# ==============================
+st.header("📬 Email Intelligence Dashboard")
+
+col1, col2 = st.columns(2)
+
+# Bright, accessible color palette
+color_map = {
+    "Sales Confirmation": "#FF6B6B",  # bright red
+    "Shipment Update": "#4ECDC4",     # turquoise
+    "RFQ": "#FFD93D",                # bright yellow
+    "Complaint": "#FF9F1C",          # orange
+    "General": "#1E90FF",            # blue
+}
+
+with col1:
+    st.subheader("📈 Email Category Distribution")
+    fig_cat = px.histogram(
+        df,
+        x="category",
+        color="category",
+        color_discrete_map=color_map,
+        title="Distribution by Category",
+    )
+    st.plotly_chart(fig_cat, use_container_width=True)
+
+with col2:
+    st.subheader("🎯 Confidence Scores Overview")
+    fig_conf = px.box(
+        df,
+        x="category",
+        y="confidence",
+        color="category",
+        color_discrete_map=color_map,
+        title="Confidence Levels by Category",
+    )
+    st.plotly_chart(fig_conf, use_container_width=True)
+
+# ==============================
+# EMAIL TABLE WITH DETAILS
+# ==============================
+st.subheader("📋 Classified Email Records")
+
+st.dataframe(
+    df[["filename", "subject", "from", "category", "confidence", "explanation"]],
+    use_container_width=True,
+    hide_index=True,
+)
+
+# ==============================
+# INTERACTIVE QUERY ASSISTANT
+# ==============================
+st.markdown("---")
+st.header("💬 Query Assistant")
+
+st.markdown(
+    "Ask a question about your data (e.g., _'Show average confidence for RFQ emails'_ or _'Which category has the highest confidence?'_):"
+)
+
+query = st.text_input("Type your question here...")
+
+if query:
+    query_lower = query.lower()
+    response = "🤖 Sorry, I couldn't understand that query."
+
+    if "average" in query_lower and "confidence" in query_lower:
+        avg_conf = df["confidence"].mean()
+        response = f"The **average confidence score** across all emails is **{avg_conf:.2f}**."
+
+    elif "highest confidence" in query_lower:
+        top = df.loc[df["confidence"].idxmax()]
+        response = f"The highest confidence email is **'{top['subject']}'**, categorized as **{top['category']}** with a score of **{top['confidence']:.2f}**."
+
+    elif "rfq" in query_lower:
+        rfq_avg = df[df["category"].str.lower() == "rfq"]["confidence"].mean()
+        response = f"The **average confidence** for RFQ emails is **{rfq_avg:.2f}**."
+
+    elif "categories" in query_lower:
+        cats = ", ".join(df["category"].unique())
+        response = f"The current categories detected are: **{cats}**."
+
+    elif "emails" in query_lower or "records" in query_lower:
+        response = f"There are **{len(df)} emails** analyzed in this batch."
+
+    st.success(response)
+
+# ==============================
+# FOOTER
+# ==============================
+st.markdown("---")
+st.caption("Built using Streamlit · Prototype powered by LangGraph-style agent logic.")
