@@ -1,253 +1,189 @@
-# app.py
-"""
-Streamlit dashboard for the LG TV Inventory Demo Agent (Accessible Version)
-
-✅ Features:
-- High-contrast, colorblind-safe color palettes
-- KPI summary, visual analytics, and query assistant
-- Ideal for LangGraph production orchestration later
-"""
-
 import streamlit as st
 import sqlite3
 import pandas as pd
-from pathlib import Path
 import plotly.express as px
-import re
 
-# === Database path ===
-DB_PATH = Path(__file__).resolve().parent / "demo.db"
-
-# === Streamlit setup ===
-st.set_page_config(page_title="LG TV Inventory Demo", layout="wide")
-st.title("📺 LG TV Inventory Automation Dashboard (Accessible Edition)")
-
-# === Utility functions ===
-@st.cache_data
-def load_inventory():
-    conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query("SELECT * FROM inventory", conn)
-    conn.close()
-    return df
-
-@st.cache_data
-def load_emails():
-    conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query("SELECT * FROM emails ORDER BY processed_at DESC", conn)
-    conn.close()
-    return df
-
-# === Load data ===
-inv = load_inventory()
-
-# -------------------------------------------------------------------
-# 📊 KPI SUMMARY
-# -------------------------------------------------------------------
-st.markdown("### 🔹 Summary Overview")
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Distinct LG Models", inv["model"].nunique())
-col2.metric("Total Inventory (Units)", int(inv["total_qty"].sum()))
-col3.metric("Average Resale Price (Batch)", f"${inv['resale_price'].mean():.2f}")
-col4.metric("Highest Resale Price", f"${inv['resale_price'].max():.2f}")
-
-# -------------------------------------------------------------------
-# 📈 1. What different LG models are offered
-# -------------------------------------------------------------------
-st.markdown("### 1️⃣ What different LG models are offered?")
-models_list = inv["model"].unique().tolist()
-st.write(f"**LG Models:** {', '.join(models_list)}")
-
-# -------------------------------------------------------------------
-# 💰 2. Average resale price per LG model (accessible colors)
-# -------------------------------------------------------------------
-st.markdown("### 2️⃣ Average Resale Price per LG Model")
-avg_price = inv.groupby("model", as_index=False)["resale_price"].mean()
-
-fig1 = px.bar(
-    avg_price,
-    x="model",
-    y="resale_price",
-    color="resale_price",
-    color_continuous_scale=["#00429d", "#73a2f0", "#f4777f", "#93003a"],  # high-contrast blue-red
-    title="Average Resale Price by Model",
+# --------------------------------------------
+# CONFIG & PAGE SETUP
+# --------------------------------------------
+st.set_page_config(
+    page_title="Smart Business Analytics Agent",
+    page_icon="📦",
+    layout="wide",
 )
-fig1.update_layout(
-    xaxis_title="Model",
-    yaxis_title="Average Resale Price (USD)",
-    font=dict(size=14),
-    title_font=dict(size=18),
-)
-st.plotly_chart(fig1, use_container_width=True)
 
-# -------------------------------------------------------------------
-# 💵 3. Average resale price of the whole batch
-# -------------------------------------------------------------------
-st.markdown("### 3️⃣ Average Resale Price of the Whole Batch")
-avg_batch = inv["resale_price"].mean()
-st.info(f"**Average resale price across all LG TV models:** ${avg_batch:.2f}")
+# Define color scheme (high-contrast for visibility)
+COLOR_CONFIDENCE_HIGH = "#2ecc71"   # Bright green
+COLOR_CONFIDENCE_MED = "#f1c40f"    # Yellow
+COLOR_CONFIDENCE_LOW = "#e74c3c"    # Red
+COLOR_PRIMARY = "#1e90ff"           # Bright blue
 
-# -------------------------------------------------------------------
-# ⚙️ 4. Technological divisions (accessible sunburst)
-# -------------------------------------------------------------------
-st.markdown("### 4️⃣ Technological Divisions by Model")
-tech_div = inv.groupby(["division", "model"]).size().reset_index(name="count")
-fig2 = px.sunburst(
-    tech_div,
-    path=["division", "model"],
-    values="count",
-    color="division",
-    color_discrete_sequence=["#1b9e77", "#d95f02", "#7570b3", "#e7298a"],  # colorblind-friendly
-    title="Technological Divisions by LG Model",
-)
-fig2.update_layout(font=dict(size=14))
-st.plotly_chart(fig2, use_container_width=True)
-
-# -------------------------------------------------------------------
-# 📦 5. Total inventory by model (accessible)
-# -------------------------------------------------------------------
-st.markdown("### 5️⃣ Total Current Inventory of LG TV Models")
-inv_qty = inv.groupby("model", as_index=False)["total_qty"].sum()
-
-fig3 = px.bar(
-    inv_qty,
-    x="model",
-    y="total_qty",
-    color="total_qty",
-    color_continuous_scale=["#004c6d", "#ffa600"],  # dark blue to orange gradient
-    title="Total Inventory (Units) by Model",
-)
-fig3.update_layout(
-    xaxis_title="Model",
-    yaxis_title="Total Units in Stock",
-    font=dict(size=14),
-    title_font=dict(size=18),
-)
-st.plotly_chart(fig3, use_container_width=True)
-
-# -------------------------------------------------------------------
-# 🏷️ 6. Different model names
-# -------------------------------------------------------------------
-st.markdown("### 6️⃣ Different Model Names Offered")
-st.dataframe(inv[["model", "model_name"]].drop_duplicates(), use_container_width=True)
-
-# -------------------------------------------------------------------
-# 📬 EMAIL CLASSIFICATION RESULTS
-# -------------------------------------------------------------------
-st.markdown("---")
-st.header("📨 Email Classification Results")
-
-try:
-    emails = load_emails()
-    if emails.empty:
-        st.info("No emails processed yet. Run `python process_eml.py` to ingest sample .eml files.")
-    else:
-        # Bright, high-contrast confidence scheme
-        def color_confidence(val):
-            if val >= 0.9:
-                return "background-color: #99e600"  # bright green
-            elif val >= 0.6:
-                return "background-color: #ffcc00"  # bright yellow
-            else:
-                return "background-color: #ff4d4d"  # bright red
-
-        st.dataframe(
-            emails[
-                ["filename", "subject", "label", "confidence", "explanation", "processed_at"]
-            ].style.applymap(color_confidence, subset=["confidence"])
-        )
-
-        conf_fig = px.histogram(
-            emails,
-            x="confidence",
-            nbins=10,
-            color="label",
-            color_discrete_sequence=["#0072B2", "#E69F00", "#D55E00", "#56B4E9"],  # accessible colors
-            title="Confidence Score Distribution (Accessible Colors)",
-        )
-        conf_fig.update_layout(
-            font=dict(size=14),
-            title_font=dict(size=18),
-            xaxis_title="Confidence Score",
-            yaxis_title="Count of Emails",
-        )
-        st.plotly_chart(conf_fig, use_container_width=True)
-
-        st.markdown(
-            """
-            **🟩 High Confidence (≥0.9)** — Rule-based match  
-            **🟨 Medium Confidence (0.6–0.9)** — Fallback heuristic  
-            **🟥 Low Confidence (<0.6)** — Needs manual review
-            """
-        )
-except Exception as e:
-    st.error(f"Error loading emails: {e}")
-
-# -------------------------------------------------------------------
-# 🤖 QUERY ASSISTANT (LLM + Data Fusion Simulation)
-# -------------------------------------------------------------------
-st.markdown("---")
-st.header("🤖 Query Assistant (LLM + Data Fusion Simulation)")
+# --------------------------------------------
+# NAVIGATION BAR
+# --------------------------------------------
+menu = st.sidebar.radio("📂 Navigation", ["Dashboard", "Query Assistant", "Settings"])
 
 st.markdown(
-    """
-    Type a natural language query below to interact with your inventory database.  
-    Examples:  
-    - "show average price of 65-inch models"  
-    - "which LG model has the highest resale price?"  
-    - "total inventory for 43-inch TVs"
-    """
+    f"""
+    <style>
+        .main {{
+            background-color: #ffffff;
+        }}
+        .stApp header {{
+            background-color: {COLOR_PRIMARY};
+            color: white;
+            padding: 0.5rem;
+        }}
+        .stApp header h1 {{
+            color: white;
+        }}
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
-query = st.text_input("Ask a question about your LG inventory:", "")
+# --------------------------------------------
+# DATABASE CONNECTION
+# --------------------------------------------
+DB_PATH = "demo_agent.db"
 
-def answer_query(q: str, data: pd.DataFrame) -> str:
-    q = q.lower()
-    models_mentioned = [m for m in data["model"].unique() if m.lower() in q]
+def get_connection():
+    return sqlite3.connect(DB_PATH)
 
-    # Highest resale price
-    if "highest" in q and "price" in q:
-        top_row = data.loc[data["resale_price"].idxmax()]
-        return f"The highest resale price is **${top_row['resale_price']:.2f}** for model **{top_row['model']} ({top_row['model_name']})**."
+# Helper to get data
+@st.cache_data
+def load_data():
+    conn = get_connection()
+    df = pd.read_sql_query("SELECT * FROM emails", conn)
+    conn.close()
+    return df
 
-    # Average resale price (global)
-    if "average" in q and "price" in q and not models_mentioned:
-        return f"The overall average resale price is **${data['resale_price'].mean():.2f}**."
+# --------------------------------------------
+# DASHBOARD PAGE
+# --------------------------------------------
+if menu == "Dashboard":
+    st.title("📦 Smart SupplyMail Analyzer")
+    st.caption("AI-powered insights from supplier and buyer communications")
 
-    # Average resale for specific models
-    if models_mentioned:
-        responses = []
-        for m in models_mentioned:
-            avg = data.loc[data["model"] == m, "resale_price"].mean()
-            responses.append(f"Model **{m}** average resale price: **${avg:.2f}**.")
-        return " ".join(responses)
+    df = load_data()
 
-    # Total inventory
-    if "total" in q and ("inventory" in q or "stock" in q):
-        if models_mentioned:
-            total = data.loc[data["model"].isin(models_mentioned), "total_qty"].sum()
-            return f"Total inventory for {', '.join(models_mentioned)} is **{int(total)} units**."
+    if df.empty:
+        st.warning("⚠️ No email data available. Please process .eml files first.")
+    else:
+        # Add confidence color
+        def confidence_color(score):
+            if score >= 0.8:
+                return COLOR_CONFIDENCE_HIGH
+            elif score >= 0.5:
+                return COLOR_CONFIDENCE_MED
+            return COLOR_CONFIDENCE_LOW
+
+        df["ConfidenceColor"] = df["confidence"].apply(confidence_color)
+
+        st.subheader("📊 Classified Emails Overview")
+        st.dataframe(df[["subject", "category", "confidence", "explanation"]], use_container_width=True)
+
+        # Visualization
+        col1, col2 = st.columns(2)
+        with col1:
+            fig1 = px.bar(
+                df,
+                x="category",
+                color="category",
+                title="Email Distribution by Category",
+                color_discrete_sequence=px.colors.qualitative.Safe
+            )
+            st.plotly_chart(fig1, use_container_width=True)
+
+        with col2:
+            fig2 = px.scatter(
+                df,
+                x="category",
+                y="confidence",
+                color="category",
+                size=[10 for _ in range(len(df))],
+                title="Confidence Levels by Category",
+                color_discrete_sequence=px.colors.qualitative.Bold
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+
+        # Inventory summary block
+        st.markdown("---")
+        st.subheader("📦 Inventory Summary Insights")
+
+        try:
+            conn = get_connection()
+            inventory_df = pd.read_sql_query("SELECT * FROM inventory", conn)
+            conn.close()
+
+            st.dataframe(inventory_df, use_container_width=True)
+
+            avg_price = inventory_df["Resale Price"].mean()
+            avg_lg = inventory_df[inventory_df["Model"].str.contains("LG", case=False, na=False)]["Resale Price"].mean()
+            total_lg = inventory_df[inventory_df["Model"].str.contains("LG", case=False, na=False)]["Stock"].sum()
+
+            st.metric("💰 Average Resale Price (All Models)", f"KES {avg_price:,.2f}")
+            st.metric("💰 Average Resale Price (LG Models)", f"KES {avg_lg:,.2f}")
+            st.metric("📦 Total LG Inventory", f"{int(total_lg)} units")
+
+        except Exception as e:
+            st.warning(f"⚠️ Could not load inventory data: {e}")
+
+# --------------------------------------------
+# QUERY ASSISTANT PAGE
+# --------------------------------------------
+elif menu == "Query Assistant":
+    st.title("💬 Query Assistant")
+    st.caption("Ask natural language questions about your inventory and email data")
+
+    user_query = st.text_input("Ask your question below:", placeholder="e.g., show average price of 65-inch models")
+
+    if st.button("Ask"):
+        if not user_query.strip():
+            st.warning("Please enter a question first.")
         else:
-            return f"Total inventory across all models is **{int(data['total_qty'].sum())} units**."
+            conn = get_connection()
+            inv_df = pd.read_sql_query("SELECT * FROM inventory", conn)
+            conn.close()
 
-    # Division query
-    if "division" in q:
-        divisions = ", ".join(data["division"].unique())
-        return f"The available technological divisions are: **{divisions}**."
+            user_query_lower = user_query.lower()
+            response = ""
 
-    return "I'm not sure about that query. Try asking about price, models, inventory, or divisions."
+            # Simple AI-ish deterministic responses
+            if "average" in user_query_lower and "price" in user_query_lower:
+                if "65" in user_query_lower:
+                    avg_65 = inv_df[inv_df["Model"].str.contains("65", na=False)]["Resale Price"].mean()
+                    response = f"The average resale price for 65-inch models is **KES {avg_65:,.2f}**."
+                else:
+                    avg_all = inv_df["Resale Price"].mean()
+                    response = f"The overall average resale price across all models is **KES {avg_all:,.2f}**."
 
-if query:
-    st.markdown(f"**🧠 Query:** {query}")
-    with st.spinner("Analyzing your request..."):
-        answer = answer_query(query, inv)
-    st.success(answer)
+            elif "inventory" in user_query_lower or "stock" in user_query_lower:
+                total_stock = inv_df["Stock"].sum()
+                response = f"The total inventory currently in stock is **{int(total_stock)} units**."
 
-# -------------------------------------------------------------------
-# 📘 Footer
-# -------------------------------------------------------------------
-st.markdown("---")
-st.caption(
-    "This dashboard demonstrates an end-to-end automation flow:\n"
-    "📥 Email ingestion → 🧠 LLM-style classification → 💾 Data storage → 📊 Visual BI → 💬 Natural-language querying.\n"
-    "This accessible edition uses high-contrast color schemes suitable for users with visual impairments."
-)
+            elif "lg" in user_query_lower:
+                lg_models = inv_df[inv_df["Model"].str.contains("LG", case=False, na=False)]["Model"].unique()
+                response = f"The LG models on offer include: **{', '.join(lg_models)}**."
+
+            else:
+                response = "I'm not sure how to answer that yet — the full LLM integration will handle this in production."
+
+            st.success(response)
+
+# --------------------------------------------
+# SETTINGS PAGE
+# --------------------------------------------
+elif menu == "Settings":
+    st.title("⚙️ Settings")
+    st.info("Future features: Email API keys, scheduling, and LangGraph workflow integrations.")
+    st.markdown(
+        """
+        **Coming soon:**
+        - Gmail/Outlook ingestion settings  
+        - Rule tuning for classification  
+        - LangGraph orchestration hooks  
+        - Data source management
+        """
+    )
+
