@@ -1,222 +1,246 @@
+# app.py
+"""
+Streamlit dashboard for the Smart Business Analytics Agent (Accessible Edition)
+
+✅ Features:
+- High-contrast, colorblind-safe color palettes
+- KPI summary, visual analytics, and query assistant
+- Ideal for LangGraph production orchestration later
+"""
+
 import streamlit as st
-import pandas as pd
 import sqlite3
+import pandas as pd
+from pathlib import Path
 import plotly.express as px
-import os
+import re
 
-# ==============================
-# APP CONFIGURATION
-# ==============================
-st.set_page_config(
-    page_title="Smart Business Analytics Agent",
-    page_icon="📊",
-    layout="wide",
+# === Database path ===
+DB_PATH = Path(__file__).resolve().parent / "demo.db"
+
+# === Streamlit setup ===
+st.set_page_config(page_title="Smart Business Analytics Agent", layout="wide")
+st.title("📊 Smart Business Analytics Agent (Accessible Edition)")
+
+# === Utility functions ===
+@st.cache_data
+def load_inventory():
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("SELECT * FROM inventory", conn)
+    conn.close()
+    return df
+
+@st.cache_data
+def load_emails():
+    conn = sqlite3.connect(DB_PATH)
+    df = pd.read_sql_query("SELECT * FROM emails ORDER BY processed_at DESC", conn)
+    conn.close()
+    return df
+
+# === Load data ===
+inv = load_inventory()
+
+# -------------------------------------------------------------------
+# 📊 KPI SUMMARY
+# -------------------------------------------------------------------
+st.markdown("### 🔹 Summary Overview")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Distinct Product Models", inv["model"].nunique())
+col2.metric("Total Inventory (Units)", int(inv["total_qty"].sum()))
+col3.metric("Average Resale Price (Batch)", f"${inv['resale_price'].mean():.2f}")
+col4.metric("Highest Resale Price", f"${inv['resale_price'].max():.2f}")
+
+# -------------------------------------------------------------------
+# 💰 1. Average resale price per product (accessible colors)
+# -------------------------------------------------------------------
+st.markdown("### 1️⃣ Average Resale Price per Product Model")
+avg_price = inv.groupby("model", as_index=False)["resale_price"].mean()
+
+fig1 = px.bar(
+    avg_price,
+    x="model",
+    y="resale_price",
+    color="resale_price",
+    color_continuous_scale=["#00429d", "#73a2f0", "#f4777f", "#93003a"],  # high-contrast blue-red
+    title="Average Resale Price by Product Model",
 )
-
-st.title("📊 Smart Business Analytics Agent")
-st.caption("An AI-powered demo for intelligent email & inventory analytics")
-
-# ==============================
-# LOAD OR CREATE DATABASE SAFELY
-# ==============================
-
-def load_data():
-    db_path = "emails.db"
-    table_name = "emails"
-
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    # Check if table exists
-    cursor.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (table_name,)
-    )
-    exists = cursor.fetchone()
-
-    if not exists:
-        # Create demo dataset
-        demo_data = [
-            (
-                "sales_confirmation.eml",
-                "Sales Confirmation",
-                "sales@example.com",
-                "This is a sales confirmation email.",
-                "Sales Confirmation",
-                0.95,
-                "High confidence due to 'confirmation' and 'sale' keywords.",
-            ),
-            (
-                "shipment_update.eml",
-                "Shipment Update",
-                "logistics@example.com",
-                "Your order has shipped and will arrive soon.",
-                "Shipment Update",
-                0.90,
-                "Detected logistics terms like 'shipped' and 'arrival'.",
-            ),
-            (
-                "rfq_request.eml",
-                "Request for Quotation",
-                "buyer@example.com",
-                "Please send a quotation for 65-inch models.",
-                "RFQ",
-                0.93,
-                "Found 'quotation' and 'request' patterns with high certainty.",
-            ),
-        ]
-        df_demo = pd.DataFrame(
-            demo_data,
-            columns=[
-                "filename",
-                "subject",
-                "from",
-                "body",
-                "category",
-                "confidence",
-                "explanation",
-            ],
-        )
-        df_demo.to_sql(table_name, conn, if_exists="replace", index=False)
-        conn.commit()
-        conn.close()
-        st.session_state["demo_mode"] = True
-        return df_demo
-
-    # If table exists, read data safely
-    try:
-        df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
-        conn.close()
-        st.session_state["demo_mode"] = False
-        return df
-    except Exception as e:
-        conn.close()
-        st.session_state["demo_mode"] = True
-        st.error(f"Database error recovered: {e}")
-        return pd.DataFrame(
-            [
-                (
-                    "demo.eml",
-                    "Fallback Email",
-                    "noreply@example.com",
-                    "This is sample fallback data.",
-                    "General",
-                    0.5,
-                    "Fallback default due to DB issue.",
-                )
-            ],
-            columns=[
-                "filename",
-                "subject",
-                "from",
-                "body",
-                "category",
-                "confidence",
-                "explanation",
-            ],
-        )
-
-
-df = load_data()
-
-# ==============================
-# DEMO MODE BANNER
-# ==============================
-if st.session_state.get("demo_mode", False):
-    st.warning(
-        "💡 Running in demo mode with sample emails. "
-        "Connect your production SQLite or cloud database for live analytics.",
-        icon="⚙️",
-    )
-
-# ==============================
-# DASHBOARD SECTION
-# ==============================
-st.header("📬 Email Intelligence Dashboard")
-
-col1, col2 = st.columns(2)
-
-# Bright, accessible color palette
-color_map = {
-    "Sales Confirmation": "#FF6B6B",  # bright red
-    "Shipment Update": "#4ECDC4",     # turquoise
-    "RFQ": "#FFD93D",                # bright yellow
-    "Complaint": "#FF9F1C",          # orange
-    "General": "#1E90FF",            # blue
-}
-
-with col1:
-    st.subheader("📈 Email Category Distribution")
-    fig_cat = px.histogram(
-        df,
-        x="category",
-        color="category",
-        color_discrete_map=color_map,
-        title="Distribution by Category",
-    )
-    st.plotly_chart(fig_cat, use_container_width=True)
-
-with col2:
-    st.subheader("🎯 Confidence Scores Overview")
-    fig_conf = px.box(
-        df,
-        x="category",
-        y="confidence",
-        color="category",
-        color_discrete_map=color_map,
-        title="Confidence Levels by Category",
-    )
-    st.plotly_chart(fig_conf, use_container_width=True)
-
-# ==============================
-# EMAIL TABLE WITH DETAILS
-# ==============================
-st.subheader("📋 Classified Email Records")
-
-st.dataframe(
-    df[["filename", "subject", "from", "category", "confidence", "explanation"]],
-    use_container_width=True,
-    hide_index=True,
+fig1.update_layout(
+    xaxis_title="Model",
+    yaxis_title="Average Resale Price (USD)",
+    font=dict(size=14),
+    title_font=dict(size=18),
 )
+st.plotly_chart(fig1, use_container_width=True)
 
-# ==============================
-# INTERACTIVE QUERY ASSISTANT
-# ==============================
+# -------------------------------------------------------------------
+# 💵 2. Average resale price of the whole batch
+# -------------------------------------------------------------------
+st.markdown("### 2️⃣ Average Resale Price of the Whole Batch")
+avg_batch = inv["resale_price"].mean()
+st.info(f"**Average resale price across all models:** ${avg_batch:.2f}")
+
+# -------------------------------------------------------------------
+# ⚙️ 3. Technological divisions (accessible sunburst)
+# -------------------------------------------------------------------
+st.markdown("### 3️⃣ Technological Divisions by Product")
+tech_div = inv.groupby(["division", "model"]).size().reset_index(name="count")
+fig2 = px.sunburst(
+    tech_div,
+    path=["division", "model"],
+    values="count",
+    color="division",
+    color_discrete_sequence=["#1b9e77", "#d95f02", "#7570b3", "#e7298a"],  # colorblind-friendly
+    title="Technological Divisions by Product Model",
+)
+fig2.update_layout(font=dict(size=14))
+st.plotly_chart(fig2, use_container_width=True)
+
+# -------------------------------------------------------------------
+# 📦 4. Total inventory by model (accessible)
+# -------------------------------------------------------------------
+st.markdown("### 4️⃣ Total Current Inventory by Product Model")
+inv_qty = inv.groupby("model", as_index=False)["total_qty"].sum()
+
+fig3 = px.bar(
+    inv_qty,
+    x="model",
+    y="total_qty",
+    color="total_qty",
+    color_continuous_scale=["#004c6d", "#ffa600"],  # dark blue to orange gradient
+    title="Total Inventory (Units) by Product Model",
+)
+fig3.update_layout(
+    xaxis_title="Model",
+    yaxis_title="Total Units in Stock",
+    font=dict(size=14),
+    title_font=dict(size=18),
+)
+st.plotly_chart(fig3, use_container_width=True)
+
+# -------------------------------------------------------------------
+# 🏷️ 5. Different model names
+# -------------------------------------------------------------------
+st.markdown("### 5️⃣ Product Model Names Offered")
+st.dataframe(inv[["model", "model_name"]].drop_duplicates(), use_container_width=True)
+
+# -------------------------------------------------------------------
+# 📬 EMAIL CLASSIFICATION RESULTS
+# -------------------------------------------------------------------
 st.markdown("---")
-st.header("💬 Query Assistant")
+st.header("📨 Email Classification Results")
+
+try:
+    emails = load_emails()
+    if emails.empty:
+        st.info("No emails processed yet. Run `python process_eml.py` to ingest sample .eml files.")
+    else:
+        # Bright, high-contrast confidence scheme
+        def color_confidence(val):
+            if val >= 0.9:
+                return "background-color: #99e600"  # bright green
+            elif val >= 0.6:
+                return "background-color: #ffcc00"  # bright yellow
+            else:
+                return "background-color: #ff4d4d"  # bright red
+
+        st.dataframe(
+            emails[
+                ["filename", "subject", "label", "confidence", "explanation", "processed_at"]
+            ].style.applymap(color_confidence, subset=["confidence"])
+        )
+
+        conf_fig = px.histogram(
+            emails,
+            x="confidence",
+            nbins=10,
+            color="label",
+            color_discrete_sequence=["#0072B2", "#E69F00", "#D55E00", "#56B4E9"],  # accessible colors
+            title="Confidence Score Distribution (Accessible Colors)",
+        )
+        conf_fig.update_layout(
+            font=dict(size=14),
+            title_font=dict(size=18),
+            xaxis_title="Confidence Score",
+            yaxis_title="Count of Emails",
+        )
+        st.plotly_chart(conf_fig, use_container_width=True)
+
+        st.markdown(
+            """
+            **🟩 High Confidence (≥0.9)** — Rule-based match  
+            **🟨 Medium Confidence (0.6–0.9)** — Fallback heuristic  
+            **🟥 Low Confidence (<0.6)** — Needs manual review
+            """
+        )
+except Exception as e:
+    st.error(f"Error loading emails: {e}")
+
+# -------------------------------------------------------------------
+# 🤖 QUERY ASSISTANT (LLM + Data Fusion Simulation)
+# -------------------------------------------------------------------
+st.markdown("---")
+st.header("🤖 Query Assistant (LLM + Data Fusion Simulation)")
 
 st.markdown(
-    "Ask a question about your data (e.g., _'Show average confidence for RFQ emails'_ or _'Which category has the highest confidence?'_):"
+    """
+    Type a natural language query below to interact with your business inventory data.  
+    Examples:  
+    - "show average price of 65-inch models"  
+    - "which product has the highest resale price?"  
+    - "total inventory for 43-inch TVs"
+    """
 )
 
-query = st.text_input("Type your question here...")
+query = st.text_input("Ask a question about your inventory:", "")
+
+def answer_query(q: str, data: pd.DataFrame) -> str:
+    q = q.lower()
+    models_mentioned = [m for m in data["model"].unique() if m.lower() in q]
+
+    # Highest resale price
+    if "highest" in q and "price" in q:
+        top_row = data.loc[data["resale_price"].idxmax()]
+        return f"The highest resale price is **${top_row['resale_price']:.2f}** for model **{top_row['model']} ({top_row['model_name']})**."
+
+    # Average resale price (global)
+    if "average" in q and "price" in q and not models_mentioned:
+        return f"The overall average resale price is **${data['resale_price'].mean():.2f}**."
+
+    # Average resale for specific models
+    if models_mentioned:
+        responses = []
+        for m in models_mentioned:
+            avg = data.loc[data["model"] == m, "resale_price"].mean()
+            responses.append(f"Model **{m}** average resale price: **${avg:.2f}**.")
+        return " ".join(responses)
+
+    # Total inventory
+    if "total" in q and ("inventory" in q or "stock" in q):
+        if models_mentioned:
+            total = data.loc[data["model"].isin(models_mentioned), "total_qty"].sum()
+            return f"Total inventory for {', '.join(models_mentioned)} is **{int(total)} units**."
+        else:
+            return f"Total inventory across all models is **{int(data['total_qty'].sum())} units**."
+
+    # Division query
+    if "division" in q:
+        divisions = ", ".join(data["division"].unique())
+        return f"The available technological divisions are: **{divisions}**."
+
+    return "I'm not sure about that query. Try asking about price, models, inventory, or divisions."
 
 if query:
-    query_lower = query.lower()
-    response = "🤖 Sorry, I couldn't understand that query."
+    st.markdown(f"**🧠 Query:** {query}")
+    with st.spinner("Analyzing your request..."):
+        answer = answer_query(query, inv)
+    st.success(answer)
 
-    if "average" in query_lower and "confidence" in query_lower:
-        avg_conf = df["confidence"].mean()
-        response = f"The **average confidence score** across all emails is **{avg_conf:.2f}**."
-
-    elif "highest confidence" in query_lower:
-        top = df.loc[df["confidence"].idxmax()]
-        response = f"The highest confidence email is **'{top['subject']}'**, categorized as **{top['category']}** with a score of **{top['confidence']:.2f}**."
-
-    elif "rfq" in query_lower:
-        rfq_avg = df[df["category"].str.lower() == "rfq"]["confidence"].mean()
-        response = f"The **average confidence** for RFQ emails is **{rfq_avg:.2f}**."
-
-    elif "categories" in query_lower:
-        cats = ", ".join(df["category"].unique())
-        response = f"The current categories detected are: **{cats}**."
-
-    elif "emails" in query_lower or "records" in query_lower:
-        response = f"There are **{len(df)} emails** analyzed in this batch."
-
-    st.success(response)
-
-# ==============================
-# FOOTER
-# ==============================
+# -------------------------------------------------------------------
+# 📘 Footer
+# -------------------------------------------------------------------
 st.markdown("---")
-st.caption ("Built using Streamlit · Prototype powered by LangGraph-style agent logic.")
+st.caption(
+    "This dashboard demonstrates an end-to-end automation flow:\n"
+    "📥 Email ingestion → 🧠 LLM-style classification → 💾 Data storage → 📊 Visual BI → 💬 Natural-language querying.\n"
+    "This accessible edition uses high-contrast color schemes suitable for users with visual impairments."
+)
