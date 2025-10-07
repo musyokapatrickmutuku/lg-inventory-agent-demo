@@ -1,5 +1,5 @@
-streamlit
-pandas
-plotly
-sqlite3-utils
-reportlab
+streamlit==1.39.0
+pandas==2.2.3
+plotly==6.3.1
+matplotlib==3.9.2
+reportlab==4.2.2
