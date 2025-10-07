@@ -1,6 +1,6 @@
 # app.py
 """
-Streamlit dashboard for the Smart Business Analytics Agent (Accessible Edition)
+Streamlit dashboard for the LG TV Inventory Demo Agent (Accessible Version)
 
 ✅ Features:
 - High-contrast, colorblind-safe color palettes
@@ -19,8 +19,8 @@ import re
 DB_PATH = Path(__file__).resolve().parent / "demo.db"
 
 # === Streamlit setup ===
-st.set_page_config(page_title="Smart Business Analytics Agent", layout="wide")
-st.title("📊 Smart Business Analytics Agent (Accessible Edition)")
+st.set_page_config(page_title="LG TV Inventory Demo", layout="wide")
+st.title("📺 LG TV Inventory Automation Dashboard (Accessible Edition)")
 
 # === Utility functions ===
 @st.cache_data
@@ -45,15 +45,22 @@ inv = load_inventory()
 # -------------------------------------------------------------------
 st.markdown("### 🔹 Summary Overview")
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Distinct Product Models", inv["model"].nunique())
+col1.metric("Distinct LG Models", inv["model"].nunique())
 col2.metric("Total Inventory (Units)", int(inv["total_qty"].sum()))
 col3.metric("Average Resale Price (Batch)", f"${inv['resale_price'].mean():.2f}")
 col4.metric("Highest Resale Price", f"${inv['resale_price'].max():.2f}")
 
 # -------------------------------------------------------------------
-# 💰 1. Average resale price per product (accessible colors)
+# 📈 1. What different LG models are offered
 # -------------------------------------------------------------------
-st.markdown("### 1️⃣ Average Resale Price per Product Model")
+st.markdown("### 1️⃣ What different LG models are offered?")
+models_list = inv["model"].unique().tolist()
+st.write(f"**LG Models:** {', '.join(models_list)}")
+
+# -------------------------------------------------------------------
+# 💰 2. Average resale price per LG model (accessible colors)
+# -------------------------------------------------------------------
+st.markdown("### 2️⃣ Average Resale Price per LG Model")
 avg_price = inv.groupby("model", as_index=False)["resale_price"].mean()
 
 fig1 = px.bar(
@@ -62,7 +69,7 @@ fig1 = px.bar(
     y="resale_price",
     color="resale_price",
     color_continuous_scale=["#00429d", "#73a2f0", "#f4777f", "#93003a"],  # high-contrast blue-red
-    title="Average Resale Price by Product Model",
+    title="Average Resale Price by Model",
 )
 fig1.update_layout(
     xaxis_title="Model",
@@ -73,16 +80,16 @@ fig1.update_layout(
 st.plotly_chart(fig1, use_container_width=True)
 
 # -------------------------------------------------------------------
-# 💵 2. Average resale price of the whole batch
+# 💵 3. Average resale price of the whole batch
 # -------------------------------------------------------------------
-st.markdown("### 2️⃣ Average Resale Price of the Whole Batch")
+st.markdown("### 3️⃣ Average Resale Price of the Whole Batch")
 avg_batch = inv["resale_price"].mean()
-st.info(f"**Average resale price across all models:** ${avg_batch:.2f}")
+st.info(f"**Average resale price across all LG TV models:** ${avg_batch:.2f}")
 
 # -------------------------------------------------------------------
-# ⚙️ 3. Technological divisions (accessible sunburst)
+# ⚙️ 4. Technological divisions (accessible sunburst)
 # -------------------------------------------------------------------
-st.markdown("### 3️⃣ Technological Divisions by Product")
+st.markdown("### 4️⃣ Technological Divisions by Model")
 tech_div = inv.groupby(["division", "model"]).size().reset_index(name="count")
 fig2 = px.sunburst(
     tech_div,
@@ -90,15 +97,15 @@ fig2 = px.sunburst(
     values="count",
     color="division",
     color_discrete_sequence=["#1b9e77", "#d95f02", "#7570b3", "#e7298a"],  # colorblind-friendly
-    title="Technological Divisions by Product Model",
+    title="Technological Divisions by LG Model",
 )
 fig2.update_layout(font=dict(size=14))
 st.plotly_chart(fig2, use_container_width=True)
 
 # -------------------------------------------------------------------
-# 📦 4. Total inventory by model (accessible)
+# 📦 5. Total inventory by model (accessible)
 # -------------------------------------------------------------------
-st.markdown("### 4️⃣ Total Current Inventory by Product Model")
+st.markdown("### 5️⃣ Total Current Inventory of LG TV Models")
 inv_qty = inv.groupby("model", as_index=False)["total_qty"].sum()
 
 fig3 = px.bar(
@@ -107,7 +114,7 @@ fig3 = px.bar(
     y="total_qty",
     color="total_qty",
     color_continuous_scale=["#004c6d", "#ffa600"],  # dark blue to orange gradient
-    title="Total Inventory (Units) by Product Model",
+    title="Total Inventory (Units) by Model",
 )
 fig3.update_layout(
     xaxis_title="Model",
@@ -118,9 +125,9 @@ fig3.update_layout(
 st.plotly_chart(fig3, use_container_width=True)
 
 # -------------------------------------------------------------------
-# 🏷️ 5. Different model names
+# 🏷️ 6. Different model names
 # -------------------------------------------------------------------
-st.markdown("### 5️⃣ Product Model Names Offered")
+st.markdown("### 6️⃣ Different Model Names Offered")
 st.dataframe(inv[["model", "model_name"]].drop_duplicates(), use_container_width=True)
 
 # -------------------------------------------------------------------
@@ -183,15 +190,15 @@ st.header("🤖 Query Assistant (LLM + Data Fusion Simulation)")
 
 st.markdown(
     """
-    Type a natural language query below to interact with your business inventory data.  
+    Type a natural language query below to interact with your inventory database.  
     Examples:  
     - "show average price of 65-inch models"  
-    - "which product has the highest resale price?"  
+    - "which LG model has the highest resale price?"  
     - "total inventory for 43-inch TVs"
     """
 )
 
-query = st.text_input("Ask a question about your inventory:", "")
+query = st.text_input("Ask a question about your LG inventory:", "")
 
 def answer_query(q: str, data: pd.DataFrame) -> str:
     q = q.lower()
