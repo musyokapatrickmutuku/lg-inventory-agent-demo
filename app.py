@@ -17,15 +17,24 @@ st.title("📊 Smart Business Analytics Agent")
 st.caption("An AI-powered demo for intelligent email & inventory analytics")
 
 # ==============================
-# LOAD / CREATE DATABASE
+# LOAD OR CREATE DATABASE SAFELY
 # ==============================
-@st.cache_data
+
 def load_data():
     db_path = "emails.db"
+    table_name = "emails"
 
-    # Create demo database if missing
-    if not os.path.exists(db_path):
-        conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # Check if table exists
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (table_name,)
+    )
+    exists = cursor.fetchone()
+
+    if not exists:
+        # Create demo dataset
         demo_data = [
             (
                 "sales_confirmation.eml",
@@ -34,7 +43,7 @@ def load_data():
                 "This is a sales confirmation email.",
                 "Sales Confirmation",
                 0.95,
-                "High confidence due to 'confirmation' and 'sale' keywords."
+                "High confidence due to 'confirmation' and 'sale' keywords.",
             ),
             (
                 "shipment_update.eml",
@@ -43,7 +52,7 @@ def load_data():
                 "Your order has shipped and will arrive soon.",
                 "Shipment Update",
                 0.90,
-                "Detected logistics terms like 'shipped' and 'arrival'."
+                "Detected logistics terms like 'shipped' and 'arrival'.",
             ),
             (
                 "rfq_request.eml",
@@ -52,7 +61,7 @@ def load_data():
                 "Please send a quotation for 65-inch models.",
                 "RFQ",
                 0.93,
-                "Found 'quotation' and 'request' patterns with high certainty."
+                "Found 'quotation' and 'request' patterns with high certainty.",
             ),
         ]
         df_demo = pd.DataFrame(
@@ -67,31 +76,34 @@ def load_data():
                 "explanation",
             ],
         )
-        df_demo.to_sql("emails", conn, if_exists="replace", index=False)
+        df_demo.to_sql(table_name, conn, if_exists="replace", index=False)
+        conn.commit()
         conn.close()
         st.session_state["demo_mode"] = True
         return df_demo
 
-    # If DB exists, load from SQLite
-    conn = sqlite3.connect(db_path)
+    # If table exists, read data safely
     try:
-        df = pd.read_sql_query("SELECT * FROM emails", conn)
+        df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+        conn.close()
         st.session_state["demo_mode"] = False
-    except Exception:
-        # fallback if table doesn't exist
-        demo_data = [
-            (
-                "demo.eml",
-                "Welcome",
-                "noreply@example.com",
-                "This is a sample record used for demonstration.",
-                "General",
-                0.5,
-                "Fallback default created due to empty database.",
-            )
-        ]
-        df = pd.DataFrame(
-            demo_data,
+        return df
+    except Exception as e:
+        conn.close()
+        st.session_state["demo_mode"] = True
+        st.error(f"Database error recovered: {e}")
+        return pd.DataFrame(
+            [
+                (
+                    "demo.eml",
+                    "Fallback Email",
+                    "noreply@example.com",
+                    "This is sample fallback data.",
+                    "General",
+                    0.5,
+                    "Fallback default due to DB issue.",
+                )
+            ],
             columns=[
                 "filename",
                 "subject",
@@ -102,10 +114,6 @@ def load_data():
                 "explanation",
             ],
         )
-        df.to_sql("emails", conn, if_exists="replace", index=False)
-        st.session_state["demo_mode"] = True
-    conn.close()
-    return df
 
 
 df = load_data()
@@ -113,7 +121,7 @@ df = load_data()
 # ==============================
 # DEMO MODE BANNER
 # ==============================
-if "demo_mode" in st.session_state and st.session_state["demo_mode"]:
+if st.session_state.get("demo_mode", False):
     st.warning(
         "💡 Running in demo mode with sample emails. "
         "Connect your production SQLite or cloud database for live analytics.",
@@ -211,4 +219,4 @@ if query:
 # FOOTER
 # ==============================
 st.markdown("---")
-st.caption("Built using Streamlit · Prototype powered by LangGraph-style agent logic.")
+st.caption("Built using Streamlit · Prototype powered
